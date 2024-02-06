@@ -3,7 +3,7 @@
 
 My name is Igor, here some facts about me:
 
-- 🔭 I’m currently working at [PSPDFKit](https://pspdfkit.com/) on a PSPDFKit for Web SDK.
+- 🔭 I’m currently working at [PSPDFKit](https://pspdfkit.com/) as a Web engineer on PSPDFKit for Web SDK.
 - 🌱 I’m passionate about Web performance and technologies.
 - 📝 I’m aiming to be more active on [LinkedIn](https://www.linkedin.com/in/iperzic/) starting from February 2024.
 - 🏆 I'm striving to increase my [GitHub stats rating](#-my-stats) by contributing to [open source](https://opensource.com/resources/what-open-source).
