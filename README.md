@@ -7,7 +7,7 @@ My name is Igor, here some facts about me:
 - 🌱 I’m passionate about Web performance and technologies.
 - 📝 I’m aiming to be more active on [LinkedIn](https://www.linkedin.com/in/iperzic/) starting from February 2024.
 - 🏆 I'm striving to increase my [GitHub stats rating](#-my-stats) by contributing to [open source](https://opensource.com/resources/what-open-source).
-- 🚣🏻‍♂️ Bonus fun fact: I used to be a professional rower 
+- 🚣🏻‍♂️ Bonus fun fact: I used to be a professional rower.
 
 ## 💻 My Tech Stack:
 
