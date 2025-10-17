@@ -3,15 +3,19 @@
 
 My name is Igor, here some facts about me:
 
-- 🔭 I’m currently working at [PSPDFKit](https://pspdfkit.com/) as a Web engineer on PSPDFKit for Web SDK.
+- 🔭 I’m currently working at [Nutrient](https://nutrient.io/) (formerly PSPDFKit) as a senior Web engineer on Nutrient Web SDK.
 - 🌱 I’m passionate about Web performance and technologies.
-- 📝 I’m aiming to be more active on [LinkedIn](https://www.linkedin.com/in/iperzic/) starting from February 2024.
 - 🏆 I'm striving to increase my [GitHub stats rating](#-my-stats) by contributing to [open source](https://opensource.com/resources/what-open-source).
 - 🚣🏻‍♂️ Bonus fun fact: I used to be a professional rower.
 
 ## 💻 My Tech Stack:
 
-[![JavaScript, TypeScript, React, Node.js](https://skillicons.dev/icons?i=js,ts,react,nodejs)](https://skillicons.dev)
+[![My Skills](https://skillicons.dev/icons?i=js,ts,html,css,tailwind,react,next,nodejs,express,mongodb,prisma,docker,figma)](https://skillicons.dev)
+
+## ✉️ Contact
+
+[![LinkedIn](https://skillicons.dev/icons?i=linkedin)](https://www.linkedin.com/in/iperzic/) &nbsp;
+[![Gmail](https://skillicons.dev/icons?i=gmail)](mailto:iperzic@yahoo.com?subject=Hi%20Igor!)
 
 ## 🏆 My Stats:
 
@@ -20,7 +24,4 @@ My name is Igor, here some facts about me:
     <img height=175 alt="Most Used Languages" src="https://github-readme-stats.vercel.app/api/top-langs/?username=iperzic&layout=compact&theme=dark" />&nbsp;&nbsp;
 </p>
 
-## ✉️ Contact
 
-[![LinkedIn](https://skillicons.dev/icons?i=linkedin)](https://www.linkedin.com/in/iperzic/) &nbsp;
-[![Gmail](https://skillicons.dev/icons?i=gmail)](mailto:iperzic@yahoo.com?subject=Hi%20Igor!)
