@@ -134,7 +134,17 @@ A market maker continuously quotes bid and ask prices, earning the spread betwee
 
 ### Core Mathematical Framework
 
-The 2008 paper by Marco Avellaneda and Sasha Stoikov provides optimal closed-form solutions.
+The 2008 paper "High-frequency trading in a limit order book" by Marco Avellaneda and Sasha Stoikov treats market making as a **stochastic optimal control problem**. The market maker maximizes expected exponential utility of terminal wealth:
+
+```
+max E[ -exp(-γ * W_T) ]
+```
+
+where `W_T = x_T + q_T * S_T` (cash + inventory valued at terminal price), and `γ` is risk aversion.
+
+**Assumptions:**
+- Mid-price follows arithmetic Brownian motion: `dS_t = σ * dW_t`
+- Order arrivals are Poisson with intensity: `λ(δ) = A * exp(-k * δ)` (exponential decay with distance `δ` from mid)
 
 #### 1. The Reservation Price (r)
 
@@ -151,7 +161,7 @@ Where:
 - `σ²` = price variance (volatility squared)
 - `T - t` = time remaining until end of trading horizon
 
-**Intuition**: If you're long (q > 0), your reservation price drops below the mid-price — you want to sell, so you quote lower to attract sellers. If you're short, the opposite.
+**Intuition**: If you're long (q > 0), your reservation price drops below the mid-price — you want to sell, so you quote lower to attract sellers. If you're short, the opposite. The adjustment shrinks as `T - t → 0`, forcing the reservation price back toward mid to liquidate before close.
 
 #### 2. The Optimal Spread (δ)
 
@@ -160,8 +170,10 @@ Where:
 ```
 
 Where:
-- `k` = order arrival intensity parameter (related to market activity)
-- Other variables as above
+- `k` = order book density parameter (related to market activity / liquidity)
+- `A` = base order arrival rate
+
+The total spread has two components: (1) a **time-varying risk premium** that shrinks toward close, and (2) a **fixed component** `(2/γ) * ln(1 + γ/k)` reflecting the trade-off between order arrival rate and risk tolerance.
 
 The optimal bid and ask quotes are then:
 
@@ -170,7 +182,16 @@ bid = r - δ/2
 ask = r + δ/2
 ```
 
-#### 3. The Key Insight
+#### 3. Order Fill Probability
+
+Given the exponential arrival model, probability of fill in time step `dt`:
+
+```
+prob_ask = 1 - exp(-λ_a * dt)   where λ_a = A * exp(-k * δ_a)
+prob_bid = 1 - exp(-λ_b * dt)   where λ_b = A * exp(-k * δ_b)
+```
+
+#### 4. The Key Insight
 
 The model dynamically adjusts quotes based on:
 - **Inventory**: The more inventory you hold, the more aggressively you skew quotes to reduce it
@@ -228,27 +249,40 @@ As described in @gemchange_ltd's thread, professional Polymarket market makers u
 The base quoting model, adapted for binary settlement as described above. Determines reservation price and optimal spread.
 
 ### 2. GLFT Inventory Bounds
-**Guéant-Lehalle-Fernandez-Tapia (GLFT)** extended the Avellaneda-Stoikov model to handle bounded inventory. Instead of letting inventory grow unboundedly, GLFT adds hard constraints:
+**Guéant-Lehalle-Fernandez-Tapia (GLFT)** (2013, "Dealing with the Inventory Risk") extended the Avellaneda-Stoikov model with two key improvements: **explicit inventory bounds** `[-Q, +Q]` and **no dependence on terminal time T** (suitable for continuous trading).
 
 ```
-Key idea: Set maximum inventory bounds [-Q_max, +Q_max]
-When inventory approaches bounds → widen spread dramatically on the
-dangerous side, narrow on the reducing side
+Key mechanics:
+  - When inventory q = +Q (max long): NO bid quotes posted (stop buying)
+  - When inventory q = -Q (max short): NO ask quotes posted (stop selling)
+  - Between bounds: quotes have dynamic skew promoting mean-reversion to zero
+
+Closed-form optimal quote depths:
+
+  half_spread = C1 + (Δ/2) * σ * C2
+  skew       = σ * C2
+
+  bid_depth(q) = half_spread + skew * q
+  ask_depth(q) = half_spread - skew * q
+
+  bid_price = fair_price - bid_depth(q)
+  ask_price = fair_price + ask_depth(q)
 ```
 
-This prevents catastrophic losses from over-accumulation.
+Where `C1` and `C2` are constants from model parameters `A`, `k`, `γ`, `σ`, and inventory bound `Q`. This is what production systems at major European and Asian banks actually run.
 
 ### 3. Glosten-Milgrom Adverse Selection Model
-Handles the problem of informed traders. The model assumes some fraction of traders have private information:
+The **Glosten-Milgrom model (1985)** proves that the presence of informed traders creates a positive bid-ask spread **even when the market maker is risk-neutral and makes zero expected profits**:
 
 ```
-When a buy order arrives → update probability upward (buyer may know something)
-When a sell order arrives → update probability downward (seller may know something)
+bid = E[true_value | a sell order arrives]   (conditional expectation given adverse signal)
+ask = E[true_value | a buy order arrives]    (conditional expectation given favorable signal)
 
-Adjust quotes based on estimated probability of trading against informed flow.
+The spread decomposes into:
+  adverse selection component + inventory costs + clearing costs
 ```
 
-In Polymarket, this is critical because insider knowledge about real-world events (elections, policy decisions) creates genuine information asymmetry.
+In Polymarket, this is critical because insider knowledge about real-world events (elections, policy decisions) creates genuine information asymmetry. A trader with faster access to breaking news will hit your stale quotes before you can cancel them — if you're quoting 0.50/0.52 and the true probability jumps to 0.90, you'll get filled on your asks and accumulate massive losing inventory.
 
 ### 4. VPIN Kill Switches
 **Volume-Synchronized Probability of Informed Trading (VPIN)** measures the toxicity of order flow in real-time:
@@ -265,7 +299,36 @@ if vpin > threshold:  # e.g., 0.7
     wait_for_cooldown()
 ```
 
-When VPIN spikes, it means order flow is heavily directional (likely informed trading). The bot stops quoting to avoid being picked off.
+When VPIN spikes, it means order flow is heavily directional (likely informed trading). The bot stops quoting to avoid being picked off. VPIN was at historically high levels one hour before the May 2010 Flash Crash.
+
+### How These Concepts Relate
+
+```
+Glosten-Milgrom (1985)          Avellaneda-Stoikov (2008)          GLFT (2013)
+     |                                  |                              |
+     | "Adverse selection              | "Optimal quotes via           | "Closed-form solution
+     |  creates the spread"            |  stochastic control"          |  with inventory bounds"
+     |                                  |                              |
+     v                                  v                              v
+  VPIN (2011)                    Reservation Price +              Hard bounds [-Q, +Q]
+     |                           Optimal Spread                   No terminal time T
+     | "Real-time toxicity                                        Mean-reverting skew
+     |  measurement"                                                    |
+     v                                                                  v
+  Kill Switch                    Applied to Binary Markets      Production MM systems
+  (cancel all quotes             (Polymarket adaptation)        (banks, crypto prediction
+   when informed flow             - Price clamped [0,1]          markets)
+   dominates)                     - σ(p) = p*(1-p)*base
+                                  - YES+NO=1 dual quoting
+```
+
+### Who's Running This Stack?
+
+The **"big three"** of prediction market making — **Susquehanna (SIG)**, **Jane Street**, and **Jump Trading** — have built dedicated prediction market desks. DRW has posted job listings for a "prediction markets trader" targeting "consistent positive expectancy through market making, microstructure exploitation, cross-platform arbitrage, event-driven momentum, and statistical models."
+
+- Average trade size grew from $300 (early 2024) to $4,800 (late 2025), reflecting institutional participation
+- ICE (NYSE parent) invested $2B in Polymarket at a $9B valuation (October 2025)
+- Jump Trading took stakes in both Polymarket and Kalshi (February 2026)
 
 ---
 
