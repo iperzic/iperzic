@@ -46,6 +46,14 @@ Polymarket is a **prediction market** built on Polygon (Ethereum L2) that uses a
 | **USDC Settlement** | All trades are denominated in USDC (stablecoin). You buy YES shares at e.g. $0.65, and if the event happens, they settle at $1.00 |
 | **On-chain Settlement** | Token minting/redemption happens on-chain (Polygon), but the order matching happens off-chain for speed |
 
+### Three-Layer Architecture
+
+| Layer | Components |
+|-------|-----------|
+| **Application Layer** | Web Frontend (React), Mobile, Third-party Apps |
+| **Service Layer** | CLOB API, Data API, Gamma API |
+| **Protocol Layer** | CTF Exchange, CTF Core, USDC Token |
+
 ### How Trading Works
 
 ```
@@ -56,25 +64,51 @@ Polymarket is a **prediction market** built on Polygon (Ethereum L2) that uses a
 5. Profit = $1.00 - purchase_price (if you were right)
 ```
 
+### Three Core Trade Operations
+
+1. **Direct Match (Token Matching)**: User-to-user trade with no minting or burning
+2. **Minting (Split)**: When orders for opposite outcomes match in price (e.g., YES at $0.70 + NO at $0.30 = $1.00), their combined $1.00 USDC is locked as collateral, and a new pair of YES and NO tokens is minted
+3. **Merging (Burn)**: Two sell orders for opposite tokens can be matched — the pair is burned, and $1.00 USDC collateral is released
+
 ### The CLOB API
 
-Polymarket exposes REST and WebSocket APIs for programmatic trading:
+Polymarket exposes three APIs and a WebSocket for programmatic trading:
+
+| API | Purpose | Auth Required |
+|-----|---------|---------------|
+| **Gamma API** | Market metadata and discovery (find markets, descriptions, categories) | None |
+| **CLOB API** | Trading operations (order book, placing/canceling orders) | API keys + EIP-712 |
+| **Data API** | User-specific data (positions, trade history) | API keys |
 
 ```
 Base URL: https://clob.polymarket.com
 
-Key Endpoints:
-  GET  /markets                    — List all markets
-  GET  /book?token_id=<id>        — Get order book for a market
-  GET  /price?token_id=<id>       — Get current price
+Read Endpoints (No Auth):
+  GET  /price?token_id=<id>       — Best bid/ask for a token
+  GET  /book?token_id=<id>        — Full order book
+  GET  /midpoint?token_id=<id>    — Midpoint price
+  GET  /spread?token_id=<id>      — Bid-ask spread
+
+Write Endpoints (Auth Required):
   POST /order                      — Place an order (signed with API key)
   DELETE /order/<id>               — Cancel an order
 
 WebSocket: wss://ws-subscriptions-clob.polymarket.com/ws/market
   — Real-time order book updates, trades, price changes
+
+Rate Limits:
+  Public API: 100 requests/minute
+  Trading endpoints: 60 orders/minute
+
+Order Types:
+  GTC (Good-Til-Cancelled) — stays on book until filled or cancelled
+  GTD (Good-Til-Date)      — active until a specified UTC timestamp
+  FOK (Fill-or-Kill)       — market order, fills immediately or cancels
 ```
 
-Orders are signed using an API key + secret derived from your Polygon wallet. The system uses EIP-712 typed data signing.
+Orders are signed using an API key + secret derived from your Polygon wallet. The system uses EIP-712 typed data signing. Authentication has two levels:
+- **L1 Headers**: For creating or deriving API credentials
+- **L2 Headers**: For all trading operations (still requires private key for EIP-712 payload signing)
 
 ---
 
@@ -364,6 +398,46 @@ class AvellanedaStoikovMM:
             time.sleep(interval_seconds)
 ```
 
+### Official Polymarket Python Client (py-clob-client)
+
+```python
+# pip install py-clob-client
+# pin web3==6.14.0 to avoid dependency conflicts
+
+from py_clob_client.client import ClobClient
+from py_clob_client.clob_types import OrderArgs, OrderType
+from py_clob_client.order_builder.constants import BUY
+
+# Initialize client (signature_type=1 for email/Magic wallet)
+client = ClobClient(
+    "https://clob.polymarket.com",
+    key="<private-key>",
+    chain_id=137,
+    signature_type=1,
+    funder="<funder-address>"
+)
+client.set_api_creds(client.create_or_derive_api_creds())
+
+# --- Read market data (no auth needed) ---
+simple_client = ClobClient("https://clob.polymarket.com")
+mid = simple_client.get_midpoint("<token-id>")
+price = simple_client.get_price("<token-id>", side="BUY")
+book = simple_client.get_order_book("<token-id>")
+
+# --- Place a GTC limit order ---
+order = OrderArgs(token_id="<token-id>", price=0.50, size=10.0, side=BUY)
+signed = client.create_order(order)
+resp = client.post_order(signed, OrderType.GTC)
+
+# --- Place a FOK market order ---
+from py_clob_client.clob_types import MarketOrderArgs
+mo = MarketOrderArgs(
+    token_id="<token-id>", amount=25.0, side=BUY, order_type=OrderType.FOK
+)
+signed = client.create_market_order(mo)
+resp = client.post_order(signed, OrderType.FOK)
+```
+
 ### TypeScript/Node.js: Connecting to Polymarket CLOB
 
 ```typescript
@@ -461,42 +535,69 @@ Identified by @gemchange_ltd — an address named "JaneStreetIndia" made ~$360,0
 - **Dual-directional bets**: Often bets on both YES and NO when total cost < $1 (e.g., YES at $0.48 + NO at $0.46 = $0.94, guaranteed $0.06 profit regardless of outcome)
 - **Result**: 99.5% algorithm accuracy over extended run
 
-### 2. Weather Market Arbitrage
+### 2. Weather Market Bots (Most Accessible Edge Right Now)
 
-- $2.4M+ being wagered on weather events on Polymarket
-- Weather data is publicly available from NOAA/NWS with high accuracy at short timeframes
-- Strategy: Compare actual meteorological model outputs with market-implied probabilities, bet when there's a gap
-- Less competitive than political/crypto markets — fewer sophisticated traders
+This is arguably the most accessible and documented profitable strategy:
+
+- **Core mechanism**: Compare official weather forecasts (GFS, ECMWF, ICON models) to Polymarket prices. When multiple models agree but the market is mispriced, bet on the forecast
+- **Multi-model consensus**: When 3+ models agree on a temperature range, accuracy is 70-90%, but markets often price these outcomes much lower
+- **Information speed edge**: Weather models update every 6 hours; bots that ingest new model runs immediately can trade before the market adjusts
+- **Documented profits**:
+  - One bot turned $1,000 into $24,000 since April 2025 trading London weather markets
+  - Another pulled in $65,000 across New York, London, and Seoul weather
+  - Trader "neobrother" accumulated $20,000+ via "temperature laddering"
+  - Trader "gopfan2" made $2M+ net profit, mostly from weather
+  - Trader "Hans323" earned $1.11M from a single London weather prediction ($92K bet at 8% odds)
 
 ### 3. News-Based Speed Trading
 
-- Break news hits 5-10 minutes before Polymarket prices react
+- Breaking news hits 5-10 minutes before Polymarket prices react
 - Monitoring news APIs, press release feeds, official government channels
 - Automated systems that detect keywords and trade before the market adjusts
 - @gemchange_ltd claims this window is "enough time to make serious money"
 
 ### 4. Market Making for Maker Rewards
 
-- Polymarket incentivizes liquidity provision with maker rewards
-- Some bots operate near-breakeven on spread capture but profit from the rewards program
-- Lower risk than directional trading — focus on volume rather than edge
+- Polymarket incentivizes liquidity provision with maker rewards (paid daily at midnight UTC)
+- Rewards use a quadratic spread function that heavily penalizes quotes far from the midpoint; ~3x rewards for two-sided quoting
+- **Early returns**: With ~$10K capital, some LPs reported $200-$800/day at peak
+- **Current realistic returns**: ~10% annualized for well-designed systems targeting low-volatility, long-dated markets
+- Best targets: long-dated markets without imminent catalysts (e.g., 2028 election markets)
+
+### 5. Cross-Platform Arbitrage
+
+- Tools like ArbBets and EventArb automate arbitrage between Polymarket and rivals (Kalshi, Betfair)
+- $40M+ in total arbitrage profits from April 2024 to April 2025
+- **Critical limitation**: Average arb opportunity duration has dropped to 2.7 seconds (from 12.3s in 2024), with 73% of profits captured by sub-100ms bots
+
+### 6. AI-Driven Probability Trading
+
+- Multiple AI models (GPT-4, Claude, fine-tuned models) analyze headlines and assign probabilities
+- Identify edges when the market is mispriced relative to AI assessment
+- One AI-driven probabilistic model reportedly generated $2.2M in profits within two months
 
 ---
 
 ## The Polymarket Ecosystem: 170+ Tools
 
-As of early 2026, the Polymarket ecosystem has grown to 170+ third-party tools across 19 categories. Key categories:
+As of early 2026, Polymarket hit $21.5B in trading volume during 2025, with weekly volumes exceeding $1.5B by January 2026. The ecosystem has grown to 170+ third-party tools across 19 categories.
+
+**Key stat: Only 7.6% of wallets are profitable** (~120,000 making money while 1.5M lose). Only 0.51% of users earned more than $1,000.
 
 | Category | Examples | Description |
 |----------|----------|-------------|
-| **Trading Bots** | poly-maker, PolyBot, Clawdbot | Automated market making and trading |
-| **Copy Trading** | PolyCop, PolyTracker | Follow successful traders' positions |
-| **Analytics** | Polymarket Analytics, PolyDash | Market data, volume analysis, whale tracking |
-| **Arbitrage** | Cross-platform arbitrage bots | Exploit price differences between prediction markets |
-| **AI Agents** | Autonomous trading agents | Use LLMs to analyze news and make probabilistic bets |
-| **News Feeds** | Real-time event trackers | Monitor news sources for trading signals |
-| **Portfolio Mgmt** | Position trackers, P&L dashboards | Track your prediction market portfolio |
-| **Snipers** | Fast-execution bots | Front-run price movements on breaking news |
+| **AI Agents** | PolyBro, Billy Bets, Astron (Raven 1.0), Fraction AI | Autonomous AI-powered trading |
+| **Analytics** | Polytrader, PolyRadar, Alphascope, Inside Edge | Market data and intelligence |
+| **Copy Trading** | PolyGun, PolyDex, Polycop, Polycool, OkBet | Follow successful traders |
+| **Cross-Platform Arb** | ArbBets, EventArb ($40M+ in profits) | Price differences between prediction markets |
+| **Trading Terminals** | Betmoar (~$110M volume), Stand.trade | Professional trading interfaces |
+| **Aggregators** | Oddpool ("Bloomberg of prediction markets") | Cross-market data aggregation |
+| **Fund Management** | PolyFund | Decentralized fund creation, pooled capital |
+| **Alerts** | PolyAlertHub, PolySpyBot | Telegram/email notifications |
+| **Whale Tracking** | Polyburg, Polywhaler, HashDive | Track large trader movements |
+| **Sports Prediction** | Sportstensor (NFL/NBA AI), Rainmaker | Sports-specific models |
+| **Dev Infrastructure** | Dome, PolyRouter, py-clob-client | Standardized APIs and clients |
+| **Bot Frameworks** | OpenClaw (one bot made $115K in a single week) | Build custom trading bots |
 
 ### Notable Open-Source Implementations
 
@@ -574,17 +675,32 @@ Even if you never trade on Polymarket, understanding these concepts is valuable:
 ## Risks and Limitations
 
 ### Financial Risks
+- **Most people lose money**: Only 7.6% of wallets are profitable; 80% of participants are net losers
+- **Binary loss**: If your prediction is wrong, you lose 100% of what you invested
 - **Competition**: Professional quant firms (Jane Street, etc.) have massive advantages in speed, capital, and sophistication
 - **Adverse Selection**: You *will* trade against informed traders who know outcomes before you
 - **Resolution Risk**: Markets can resolve unexpectedly — a $0.95 YES position can still go to $0
 - **Smart Contract Risk**: Bugs in the CTF token contracts or Polymarket's system
-- **Regulatory Risk**: Polymarket has faced CFTC scrutiny; US users face restrictions
+
+### Competitive / Structural Risks
+- **Bot dominance**: 73% of arbitrage profits captured by sub-100ms bots. Average arb opportunity duration: 2.7 seconds
+- **Spread compression**: Bid-ask spreads compressed from 4.5% (2023) to 1.2% (2025). Professional market makers dominate order books
+- **Liquidity reward decay**: Rewards that once yielded 2-3% daily now yield ~10% annualized
+
+### Regulatory Risks
+- **U.S. Federal**: Polymarket paid $1.4M CFTC penalty in 2022. Re-entered the U.S. market in late 2025 after acquiring CFTC-licensed QCEX for $112M
+- **U.S. State conflicts**: Nevada (gaming license dispute), Tennessee (ordered closure of sports prediction markets), Massachusetts (injunction against sports-related contracts)
+- **International bans**: Blocked in Poland, Singapore, Belgium, Hungary, and Portugal
+- **Ethical controversies**: Markets on NASA mission explosions, war outcomes, and "death markets" have drawn Congressional scrutiny
+- **Insider trading**: In January 2026, a newly created account made $400K+ on Venezuela-related positions under suspicion of insider knowledge, prompting the "Public Integrity in Financial Prediction Markets Act of 2026"
 
 ### Technical Risks
 - **Latency**: Your bot is competing against colocated systems; retail latency is a disadvantage
-- **API Rate Limits**: Polymarket's CLOB API has rate limits that constrain bot activity
+- **API Rate Limits**: Polymarket's CLOB API limits: 100 req/min (public), 60 orders/min (trading)
 - **Liquidity**: Many markets are thin — your orders may be the only liquidity, making you vulnerable
 - **Order Book Manipulation**: A single <$0.10 transaction can wipe market-making orders worth tens of thousands of dollars (documented vulnerability)
+- **Security**: Documented cases of fake Polymarket npm packages that steal private keys
+- **Wash trading**: Research flagged ~15% of Polymarket wallets as having activity consistent with wash trading
 
 ### The Honest Assessment
 As the author of poly-maker (warproxxx) puts it:
@@ -617,5 +733,14 @@ The real value for most developers is in **building tools around the ecosystem**
 - [Avellaneda-Stoikov implementation walkthrough (Medium)](https://medium.com/@degensugarboo/avellaneda-and-stoikov-mm-paper-implementation-b7011b5a7532)
 
 ### Polymarket Documentation
-- [Polymarket CLOB API Docs](https://docs.polymarket.com/)
+- [Polymarket CLOB API Docs](https://docs.polymarket.com/developers/CLOB/introduction)
+- [Polymarket Orders Overview](https://docs.polymarket.com/developers/CLOB/orders/orders)
+- [Polymarket Liquidity Rewards Docs](https://docs.polymarket.com/polymarket-learn/trading/liquidity-rewards)
 - [Polymarket GitHub Organization](https://github.com/Polymarket)
+- [Polymarket AI Agents Repo](https://github.com/Polymarket/agents)
+- [CTF Exchange Contract](https://github.com/Polymarket/ctf-exchange)
+
+### Tool Directories
+- [PolyCatalog](https://www.polycatalog.io/polymarket-tools) — Comprehensive tool directory
+- [Polymark.et](https://polymark.et/) — Apps directory
+- [Awesome Prediction Market Tools](https://github.com/aarora4/Awesome-Prediction-Market-Tools) — Curated list
