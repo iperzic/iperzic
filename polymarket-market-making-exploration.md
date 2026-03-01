@@ -22,14 +22,25 @@
 
 ## What Is This About?
 
-@gemchange_ltd (founder of @coldvisionXYZ) posted a deep technical thread explaining that **most retail traders on Polymarket are unknowingly trading against sophisticated algorithmic market makers** running math from the Avellaneda-Stoikov model — a framework developed in 2008 for optimal market making in electronic markets.
+@gemchange_ltd (founder of @coldvisionXYZ) published a long-form X Article titled **"How Jump Trading, Jane Street, and a Guy With $10K Fighting Over the Same Polymarket Order Book"** (February 21, 2026 — 79.2K views, 722 likes, 1.3K bookmarks).
 
-The key insight: while retail traders chase narratives and gut feelings, quantitative firms like Jane Street deploy bots that mathematically compute optimal bid/ask quotes, manage inventory risk, and capture the spread — consistently extracting value from the market.
+The article explains that **most retail traders on Polymarket are unknowingly trading against sophisticated algorithmic market makers** running math from the Avellaneda-Stoikov model — a framework developed in 2008 for optimal market making in electronic markets.
 
-The thread breaks down:
-- **Part I: The Machine You're Trading Against** — What market making bots actually do
-- **Part II: The Reservation Price** — How bots determine their "true" internal price
-- **Part III: The Bounded Inventory Problem** — How bots manage risk as they accumulate positions
+The key insight: while retail traders chase narratives and gut feelings, quantitative firms like Jane Street (20-person desk, sub-100ms execution) and Jump Trading deploy bots that mathematically compute optimal bid/ask quotes, manage inventory risk, and capture the spread — consistently extracting value from the market.
+
+The article breaks down into three parts:
+- **Part I: The Machine You're Trading Against** — The competitive landscape: Jump Trading, institutional infrastructure, and why the "$10K + Python era is dead"
+- **Part II: The Reservation Price** — The single most important number in market making: not the observed mid-price, but the market maker's own adjusted internal valuation
+- **Part III: The Bounded Inventory Problem** — How market makers manage inventory risk on binary outcome markets that settle at 0 or 1
+
+Key data points from the article:
+- Arbitrage opportunity duration shrunk from **12.3 seconds** (2024) to **2.7 seconds** (2026)
+- **73%** of arbitrage profits captured by sub-100ms execution bots
+- Median arbitrage spread: just **0.3%** (barely profitable after gas fees)
+- Python systems: **250-500 microseconds** per message; Rust/C++ HFT systems: **~12 microseconds** (Python is 20-40x slower)
+
+As [@Kropanchik reacted](https://x.com/Kropanchik/status/2025730323342876944):
+> "This article just explained why building a profitable Polymarket bot in 2026 is nearly IMPOSSIBLE. The math checks out — Jump Trading, 20-person desk, sub-100ms execution. Arbitrage windows down from 12 seconds to 2.7 seconds. The $10K + Python era is dead."
 
 ---
 
@@ -703,6 +714,9 @@ Even if you never trade on Polymarket, understanding these concepts is valuable:
 - **Wash trading**: Research flagged ~15% of Polymarket wallets as having activity consistent with wash trading
 
 ### The Honest Assessment
+
+@gemchange_ltd themselves [wrote a separate thread](https://x.com/gemchange_ltd/status/2003420311983731150) titled **"Devs are making $10k-200k monthly on Polymarket — no they're not"**, debunking easy-profit claims: zero fees = zero friction for HFT shops, and you're competing with Rust bots on dedicated Polygon nodes.
+
 As the author of poly-maker (warproxxx) puts it:
 
 > "In today's market, this bot is not profitable and will lose money. I recommend using it as a reference implementation. Increased competition on Polymarket makes it impractical unless you're willing to dedicate significant time."
@@ -726,11 +740,14 @@ The real value for most developers is in **building tools around the ecosystem**
 - [Polymarket CLOB Client (TypeScript)](https://github.com/Polymarket/clob-client) — Official TS client
 
 ### Articles & Threads
-- [@gemchange_ltd's Stoikov thread](https://x.com/gemchange_ltd/status/2025908468633268456)
-- [@gemchange_ltd's Jane Street bot analysis](https://x.com/gemchange_ltd/status/1999398039761428615)
+- [@gemchange_ltd — "How Jump Trading, Jane Street, and a Guy With $10K..."](https://x.com/gemchange_ltd/status/2025908468633268456) — The main article
+- [@gemchange_ltd — "Devs are making $10k-200k monthly — no they're not"](https://x.com/gemchange_ltd/status/2003420311983731150) — Reality check
+- [@gemchange_ltd — Jane Street bot analysis](https://x.com/gemchange_ltd/status/1999398039761428615) — JaneStreetIndia $360K HFT
+- [@Kropanchik's reaction](https://x.com/Kropanchik/status/2025730323342876944) — "The $10K + Python era is dead"
 - [DeFiPrime — Definitive Guide to the Polymarket Ecosystem](https://defiprime.com/definitive-guide-to-the-polymarket-ecosystem)
 - [Polymarket — Automated Market Making guide](https://news.polymarket.com/p/automated-market-making-on-polymarket)
 - [Avellaneda-Stoikov implementation walkthrough (Medium)](https://medium.com/@degensugarboo/avellaneda-and-stoikov-mm-paper-implementation-b7011b5a7532)
+- [Jump Trading takes stakes in Polymarket/Kalshi (CoinDesk)](https://www.coindesk.com/business/2026/02/10/jump-trading-to-take-small-stakes-in-polymarket-kalshi-bloomberg/)
 
 ### Polymarket Documentation
 - [Polymarket CLOB API Docs](https://docs.polymarket.com/developers/CLOB/introduction)
